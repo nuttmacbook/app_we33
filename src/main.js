@@ -15,7 +15,7 @@ function SSR(data) {
 
     app.innerHTML = /*html*/`
         <div class="m-auto">
-            Upcoming Launch
+            Upcoming Launch...
         </div>
     `;
 }
@@ -25,6 +25,6 @@ async function renderApp(wallet) {
     if (path !== "/") return;
 
     const data = await getContractData(wallet);
-    
+
     SSR(data);
 }
