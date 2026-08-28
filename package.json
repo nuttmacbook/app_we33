@@ -1,0 +1,21 @@
+{
+  "name": "app_we33",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "kitbox": "^1.5.7"
+  },
+  "overrides": {
+    "axios": "^1.15.0"
+  },
+  "dependencies": {
+    "vite": "^8.0.9"
+  }
+}

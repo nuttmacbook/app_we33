@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+    color-scheme: dark;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: .01em;
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    place-items: start;
+    min-width: 320px;
+    min-height: 100vh;
+
+}
+
+#app {
+    @apply w-full min-h-screen flex;
+}
+
+::selection {
+    background: #34d399;
+    color: #0a0a0a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
