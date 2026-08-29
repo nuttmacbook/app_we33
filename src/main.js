@@ -42,18 +42,18 @@ async function getContractData(wallet, focusId = 0n) {
 }
 
 function toActualSeatCounts(data, maxRank = 6) {
-  const result = { ...data };
+    const result = { ...data };
 
-  for (let rank = 1; rank <= maxRank; rank++) {
-    const current = Number(data[`totalSeat_rank_${rank}`]) || 0;
-    const next = rank < maxRank
-      ? Number(data[`totalSeat_rank_${rank + 1}`]) || 0
-      : 0;
+    for (let rank = 1; rank <= maxRank; rank++) {
+        const current = Number(data[`totalSeat_rank_${rank}`]) || 0;
+        const next = rank < maxRank
+            ? Number(data[`totalSeat_rank_${rank + 1}`]) || 0
+            : 0;
 
-    result[`totalSeat_rank_${rank}`] = Math.max(0, current - next);
-  }
+        result[`totalSeat_rank_${rank}`] = Math.max(0, current - next);
+    }
 
-  return result;
+    return result;
 }
 
 function SSR(data) {
@@ -69,7 +69,15 @@ function SSR(data) {
     const fetchUrlId = new URLSearchParams(location.search).get('id');
     if (fetchUrlId) { localStorage.setItem("sponsorId", fetchUrlId); }
 
-    const sponsorId = BigInt(localStorage.getItem("sponsorId")) * 1n ?? 1n;
+    function toBigIntOr(value, fallback) {
+        try {
+            return BigInt(String(value).trim());
+        } catch {
+            return fallback;
+        }
+    }
+
+    const sponsorId = toBigIntOr(localStorage.getItem("sponsorId"), 1n);
 
     app.innerHTML = /*html*/`
         <div class="w-full p-4">
