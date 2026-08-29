@@ -1086,8 +1086,8 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
 
             <div class="we33-join-perks">
               <span class="we33-join-perk">6 ranks</span>
-              <span class="we33-join-perk">16 spot matrix</span>
-              <span class="we33-join-perk">Affiliate rewards</span>
+              <span class="we33-join-perk">Reinvest</span>
+              <span class="we33-join-perk">Affiliate</span>
             </div>
 
             ${connected ? `
@@ -1254,7 +1254,7 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
           <div class="we33-group">
             <div class="we33-stats">
               ${stat('Total positions', formatCount(dapp.latestPosition))}
-              ${stat('Global direct', formatCount(dapp.globalDirect))}
+              ${stat('Global Users', formatCount(dapp.globalDirect + 1n))}
             </div>
           </div>
 
