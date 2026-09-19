@@ -28,9 +28,12 @@
 //   • Free spot whose parent is taken -> Available card.
 //   • Anything under an id 0 spot can never hold data -> quiet dot.
 //
-// Rank ladder (value in whole tokens)
-//   rank 1 below 30 · rank 2 below 90 · rank 3 below 210 · rank 4 below 450
-//   rank 5 below 930 · rank 6 at 930 and above
+// Rank ladder (value in whole tokens) — set per package in PACKAGE_CONFIG
+//   rankSteps: [rank 1, rank 2, rank 3, rank 4, rank 5, rank 6]
+//   each number is the value that opens that rank, e.g. the default
+//   [0, 30, 90, 210, 450, 930] means rank 2 from 30, rank 6 from 930.
+//   Priority: options.rankSteps > options.packages[i].rankSteps
+//             > PACKAGE_CONFIG[i].rankSteps > DEFAULT_RANK_STEPS
 //
 // Balances are not on chain in this call, so pass them in:
 //   renderSpots(account, dapp, spots, {
@@ -64,11 +67,29 @@ const REF_BASE = 'https://www.we33.online?id=';
 
 const LOGO_URL = 'https://www.we33.online/logo.png';
 
-/** Value thresholds that open each rank, in whole tokens. */
-const RANK_STEPS = [0, 30, 90, 210, 450, 930];
+/** Fallback ladder when a package has no valid rankSteps of its own. */
+const DEFAULT_RANK_STEPS = [0, 30, 90, 210, 450, 930];
+
+/* ============================ PACKAGE CONFIG ============================
+ * ตั้งค่าแต่ละแพคเก็จตรงนี้
+ *   name       ชื่อบนปุ่ม
+ *   address    (ไม่บังคับ) แอดเดรสสัญญา แสดงแบบย่อใต้ชื่อบน PC
+ *   rankSteps  ราคาเริ่มของ Rank 1 ถึง Rank 6 (หน่วยเป็นเหรียญเต็ม)
+ *              ต้องมี 6 ค่า เริ่มที่ 0 และเรียงจากน้อยไปมาก
+ * ======================================================================== */
+const PACKAGE_CONFIG = [
+  {
+    name: 'Package $2',
+    rankSteps: [0, 3, 9, 21, 45, 93],
+  },
+  {
+    name: 'Package $20',
+    rankSteps: [0, 30, 90, 210, 450, 930], // แก้ราคาของแพค 2 ตรงนี้
+  },
+];
 
 /** Shown when the app does not pass its own package list. */
-const DEFAULT_PACKAGES = [{ name: 'Package $2' }, { name: 'Package $20' }];
+const DEFAULT_PACKAGES = PACKAGE_CONFIG;
 
 /** Everyone starts on Package 1 (index 0). */
 const DEFAULT_PACKAGE_INDEX = 0;
@@ -221,16 +242,38 @@ function toTokens(value) {
   catch { return 0; }
 }
 
-/** Where a value sits on the rank ladder. */
-export function rankProgress(value) {
+/**
+ * A usable ladder: 6 finite numbers, first one 0, strictly rising.
+ * Anything else returns null so the caller can fall back.
+ */
+function cleanSteps(steps) {
+  if (!Array.isArray(steps) || steps.length !== 6) return null;
+  const n = steps.map(Number);
+  if (!n.every(Number.isFinite) || n[0] !== 0) return null;
+  for (let i = 1; i < n.length; i++) if (n[i] <= n[i - 1]) return null;
+  return n;
+}
+
+/** Ladder for one package, following the priority order in the header. */
+export function rankStepsFor(index, pkg, override) {
+  const steps = cleanSteps(override)
+    ?? cleanSteps(pkg?.rankSteps)
+    ?? cleanSteps(PACKAGE_CONFIG[index]?.rankSteps)
+    ?? DEFAULT_RANK_STEPS;
+  return steps;
+}
+
+/** Where a value sits on the rank ladder of the given steps. */
+export function rankProgress(value, steps = DEFAULT_RANK_STEPS) {
+  const S = cleanSteps(steps) ?? DEFAULT_RANK_STEPS;
   const v = toTokens(value);
-  const top = RANK_STEPS[RANK_STEPS.length - 1];
+  const top = S[S.length - 1];
   if (v >= top) return { rank: 6, next: null, target: top, pct: 100 };
 
   let i = 0;
-  while (i < RANK_STEPS.length - 1 && v >= RANK_STEPS[i + 1]) i += 1;
-  const lo = RANK_STEPS[i];
-  const hi = RANK_STEPS[i + 1];
+  while (i < S.length - 1 && v >= S[i + 1]) i += 1;
+  const lo = S[i];
+  const hi = S[i + 1];
   const frac = hi > lo ? (v - lo) / (hi - lo) : 0;
   return { rank: i + 1, next: i + 2, target: hi, pct: ((i + frac) / 5) * 100 };
 }
@@ -1040,7 +1083,7 @@ ${R} .we33-hint{display:none;margin:5px 0 0;text-align:center;font-size:clamp(7.
  * @param {{defaultDepth?:'auto'|4|8, frame?:boolean,
  *          balances?:{point?:any,redeem?:any,airdrop?:any,usdt?:any},
  *          packages?:{name?:string,address?:string}[], activePackage?:number,
- *          wallet?:any,
+ *          wallet?:any, rankSteps?:number[],
  *          refBase?:string}} [options]
  * @returns {string} HTML
  */
@@ -1057,6 +1100,7 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
     window.__we33Wallet = options.wallet ?? (connected ? { address: account } : null);
   }
   const packageName = packages[activePackage]?.name ?? `Package ${activePackage + 1}`;
+  const rankSteps = rankStepsFor(activePackage, packages[activePackage], options.rankSteps);
 
   const rid = `we33-${++__uid}`;
   const input = resolveInputs(dappData, spotsData);
@@ -1090,7 +1134,7 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
   const owner = spotOwner(focus) ?? {};
   const ids = focusLive ? heldIds(owner) : [];
   const focusValue = focusLive ? spotValue(focus) : 0;
-  const ladder = rankProgress(focusValue);
+  const ladder = rankProgress(focusValue, rankSteps);
   const atTop = rank >= 6;
 
   const stat = (label, value, opts = {}) => `
