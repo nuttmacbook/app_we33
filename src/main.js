@@ -4,7 +4,7 @@ import './main.css';
 
 import { box, delay, modal } from './web3/connect';
 import { Tether } from './web3/contracts/contract_tether';
-import { DividendCA, WE33_Logic } from './web3/contracts/contract_we33logic';
+import { DividendCA, WE33_Logic, WE33_Logic_2 } from './web3/contracts/contract_we33logic';
 import { registerExt } from './web3/intereacts/registerExt';
 import { uprankExt } from './web3/intereacts/uprankExt';
 
@@ -30,7 +30,7 @@ async function getContractData(wallet, focusId = 0n) {
     const account = wallet?.address ?? box.ZERO;
     const packageId = window?.__we33Package ?? 0;
 
-    const contractSelector = (packageId == 0) ? WE33_Logic.address : WE33_Logic.address;
+    const contractSelector = (packageId == 0) ? WE33_Logic_2.address : WE33_Logic.address;
     const mountContract = { address: contractSelector, abi: WE33_Logic.abi }
 
     const we33 = box.createWeb3Contract(mountContract, box.getCurrentRpc());
@@ -96,7 +96,14 @@ async function getContractData(wallet, focusId = 0n) {
 
     //await dividendOut(5);
 
-    return { wallet, packageId, account, getDappData, getSpotsData, getVirtualWalletInfo, usdtBalance };
+    const wepointSet = (packageId == 0) ? { base: 2n, each: 0n } : { base: 20n, each: 2n }
+
+    const basePoint = (getSpotsData?.[1]?.id) ? wepointSet.base : 0n;
+    const growPoint = getSpotsData?.[1]?.owner?.direct * wepointSet.each;
+    const point = (!basePoint) ? 0n : (basePoint + growPoint) * BigInt(1e18)
+    const balances = { point, redeem: 0n, airdrop: 0n, usdt: usdtBalance };
+
+    return { wallet, packageId, account, getDappData, getSpotsData, getVirtualWalletInfo, balances };
 }
 
 function toActualSeatCounts(data, maxRank = 6) {
@@ -119,11 +126,6 @@ function SSR(data) {
     const app = document.querySelector('#app');
     if (!app) return;
 
-    const basePoint = (data?.getSpotsData?.[1]?.id) ? 20n : 0n;
-    const growPoint = data?.getSpotsData?.[1]?.owner?.direct * 2n;
-    const point = (!basePoint) ? 0n : (basePoint + growPoint) * BigInt(1e18)
-    const balances = { point, redeem: 0n, airdrop: 0n, usdt: data?.usdtBalance };
-
     const fetchUrlId = new URLSearchParams(location.search).get('id');
     if (fetchUrlId) { localStorage.setItem("sponsorId", fetchUrlId); }
 
@@ -139,7 +141,7 @@ function SSR(data) {
 
     app.innerHTML = /*html*/`
         <div class="w-full p-4">
-            ${renderSpots(data?.account, toActualSeatCounts(data?.getDappData), data?.getSpotsData, { balances, sponsorId })}
+            ${renderSpots(data?.account, toActualSeatCounts(data?.getDappData), data?.getSpotsData, { balances: data?.balances, sponsorId })}
         </div>
     `;
 }

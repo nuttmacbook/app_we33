@@ -68,7 +68,7 @@ const LOGO_URL = 'https://www.we33.online/logo.png';
 const RANK_STEPS = [0, 30, 90, 210, 450, 930];
 
 /** Shown when the app does not pass its own package list. */
-const DEFAULT_PACKAGES = [{ name: 'Package 1' }, { name: 'Package 2' }];
+const DEFAULT_PACKAGES = [{ name: 'Package $2' }, { name: 'Package $20' }];
 
 /** Everyone starts on Package 1 (index 0). */
 const DEFAULT_PACKAGE_INDEX = 0;

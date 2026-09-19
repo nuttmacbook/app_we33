@@ -1,19 +1,23 @@
 import { box } from "../connect";
 import { Tether } from "../contracts/contract_tether";
-import { WE33_Logic } from "../contracts/contract_we33logic";
+import { WE33_Logic, WE33_Logic_2 } from "../contracts/contract_we33logic";
 
 async function approval(amount) {
     const wallet = await box.getCurrentState();
+
+    const packageId = window?.__we33Package ?? 0;
+    const contractSelector = (packageId == 0) ? WE33_Logic_2.address : WE33_Logic.address;
+    const mountContract = { address: contractSelector, abi: WE33_Logic.abi }
 
     const account = wallet?.address;
     const signer = wallet?.signer;
 
     const tether = await box.createEtherContract(Tether, signer);
-    const allowance = await tether.allowance(account, WE33_Logic.address);
+    const allowance = await tether.allowance(account, mountContract.address);
 
     if (BigInt(amount) > allowance) {
         try {
-            const tx = await tether.approve(WE33_Logic.address, box.maxUint256);
+            const tx = await tether.approve(mountContract.address, box.maxUint256);
             await tx.wait();
         } catch (error) {
             throw new Error(contextError);
@@ -24,10 +28,14 @@ async function approval(amount) {
 export async function uprankExt(id) {
     const wallet = await box.getCurrentState();
 
+    const packageId = window?.__we33Package ?? 0;
+    const contractSelector = (packageId == 0) ? WE33_Logic_2.address : WE33_Logic.address;
+    const mountContract = { address: contractSelector, abi: WE33_Logic.abi }
+
     const account = wallet?.address;
     const signer = wallet?.signer;
 
-    const we33 = await box.createEtherContract(WE33_Logic, signer);
+    const we33 = await box.createEtherContract(mountContract, signer);
 
     await approval(BigInt(480e18));
 
@@ -37,7 +45,7 @@ export async function uprankExt(id) {
         const result = await tx.wait();
         return { result: result.status, txhash: result.hash };
     } catch (error) {
-        const handleTxError = box.handleTxError(WE33_Logic, error);
+        const handleTxError = box.handleTxError(mountContract, error);
         const contextError = handleTxError?.raw?.reason || handleTxError?.raw?.shortMessage
         console.log({ handleTxError })
         throw new Error(contextError);
