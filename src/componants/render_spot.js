@@ -11,6 +11,7 @@
 //
 // Output
 //   navbar          brand + wallet state, full width
+//   package bar     switch between package contracts, full width
 //   column 1        identity panel  (rank, value, rank ladder, account,
 //                                    referrer, referral link, upgrade, held ids)
 //                   wallet panel    (earnings and balances, redeem + transfer)
@@ -36,9 +37,20 @@
 //     balances: { point: '0', redeem: '0', airdrop: '0', usdt: '0' }
 //   })
 //
+// Packages (optional). Without them the bar shows "Package 1" and "Package 2".
+//   renderSpots(account, dapp, spots, {
+//     packages: [{ name: 'Package 1', address: '0x…' }, { name: 'Package 2', address: '0x…' }],
+//     activePackage: 0,
+//   })
+// When activePackage is not passed, the last clicked package (window.__we33Package)
+// stays highlighted across renders.
+//
 // App hooks — inline calls are guarded, so nothing breaks until you define them
 //   searchFocus(id)      every spot card, every held id chip, the search field
 //   connectWallet()      navbar, both states     [data-action="connect-wallet"]
+//   switchPackage(i, wallet)  package bar        [data-action="switch-package"] data-package
+//                        wallet = options.wallet, or { address: account } when not passed,
+//                        or null when no wallet is connected
 //   registerAccount(id)  join panel              [data-action="register"]
 //   redeemBalance()      redeem tile            [data-action="redeem"]
 //   transferPoint()      WE Point tile          [data-action="transfer"]
@@ -54,6 +66,12 @@ const LOGO_URL = 'https://www.we33.online/logo.png';
 
 /** Value thresholds that open each rank, in whole tokens. */
 const RANK_STEPS = [0, 30, 90, 210, 450, 930];
+
+/** Shown when the app does not pass its own package list. */
+const DEFAULT_PACKAGES = [{ name: 'Package 1' }, { name: 'Package 2' }];
+
+/** Everyone starts on Package 1 (index 0). */
+const DEFAULT_PACKAGE_INDEX = 0;
 
 let __uid = 0;
 
@@ -378,6 +396,55 @@ function arms(states, cls = '') {
 
 const trunk = (on) => `<div class="we33-trunk${on ? '' : ' we33-arm--off'}"><i></i></div>`;
 
+/* ---------------------------- package switch ---------------------------- */
+
+/**
+ * Active package. Everyone starts on Package 1; after a click the choice is
+ * kept for later renders in this page session (a reload goes back to 1).
+ * An explicit options.activePackage always wins.
+ */
+function activePackageIndex(opt, count) {
+  const saved = typeof window !== 'undefined' ? window.__we33Package : undefined;
+  const i = Number(opt ?? saved ?? DEFAULT_PACKAGE_INDEX);
+  return Number.isInteger(i) && i >= 0 && i < count ? i : DEFAULT_PACKAGE_INDEX;
+}
+
+/**
+ * Segmented control, one segment per package. A sliding pill marks the active
+ * one. Clicking moves the pill straight away, remembers the choice in
+ * window.__we33Package, dims the dashboard, and calls switchPackage(i, wallet) when the
+ * app has defined it.
+ */
+function packageBar(packages, active) {
+  const tabs = packages.map((p, i) => {
+    const on = i === active;
+    const name = p?.name ?? `Package ${i + 1}`;
+    const js = `if(this.classList.contains('is-on'))return;`
+      + `var s=this.closest('section'),g=this.parentNode;`
+      + `g.querySelectorAll('.we33-pkg').forEach(function(b){b.classList.remove('is-on');b.setAttribute('aria-pressed','false')});`
+      + `this.classList.add('is-on');this.setAttribute('aria-pressed','true');g.style.setProperty('--i','${i}');`
+      + `window.__we33Package=${i};`
+      + `if(typeof switchPackage==='function'){s.classList.add('we33-busy');`
+      + `Promise.resolve().then(function(){return switchPackage(${i},window.__we33Wallet||null)}).catch(function(e){console.error(e)})`
+      + `.finally(function(){s.classList.remove('we33-busy')})}`;
+
+    return /*html*/`
+      <button type="button" class="we33-pkg${on ? ' is-on' : ''}" data-action="switch-package"
+              data-package="${i}" aria-pressed="${on}" title="${esc(p?.address ?? name)}" onclick="${esc(js)}">
+        <span class="we33-pkg-num" aria-hidden="true">${i + 1}</span>
+        <span class="we33-pkg-name">${esc(name)}</span>
+        ${p?.address ? `<span class="we33-pkg-addr">${esc(shortAddress(p.address, 3, 3))}</span>` : ''}
+      </button>`;
+  }).join('');
+
+  return /*html*/`
+  <div class="we33-pkgbar">
+    <span class="we33-label we33-pkgbar-label">Package</span>
+    <div class="we33-pkgs" role="group" aria-label="Choose package"
+         style="--n:${packages.length};--i:${active}">${tabs}</div>
+  </div>`;
+}
+
 /* -------------------------------- styles -------------------------------- */
 
 function styles(rid, frame) {
@@ -499,6 +566,61 @@ ${R} .we33-connect{
 }
 ${R} .we33-connect:hover{transform:translateY(-1px);filter:saturate(1.1)}
 ${R} .we33-connect:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
+
+/* ---------- package switch ---------- */
+${R} .we33-pkgbar{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  margin-bottom:clamp(10px,1.3cqw,16px);
+}
+${R} .we33-pkgbar-label{color:var(--ink-faint)}
+${R} .we33-pkgs{
+  position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));
+  width:100%;max-width:400px;padding:4px;border-radius:999px;
+  border:1px solid var(--hair);
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 10px 24px -20px rgba(0,0,0,1);
+}
+/* sliding pill behind the active segment */
+${R} .we33-pkgs::before{
+  content:'';position:absolute;top:4px;bottom:4px;left:4px;
+  width:calc((100% - 8px) / var(--n));
+  transform:translateX(calc(var(--i) * 100%));
+  border-radius:999px;
+  background:linear-gradient(135deg,#4BF092,#25DD8B 45%,var(--cyan));
+  box-shadow:0 1px 0 rgba(255,255,255,.45) inset,0 8px 18px -10px rgba(47,232,132,.95);
+  transition:transform .32s cubic-bezier(.3,.8,.3,1);
+}
+${R} .we33-pkg{
+  position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  height:34px;padding:0 12px;border:0;border-radius:999px;cursor:pointer;
+  background:transparent;color:var(--ink-dim);font:inherit;white-space:nowrap;
+  transition:color .2s ease;
+}
+${R} .we33-pkg:hover{color:var(--ink)}
+${R} .we33-pkg:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+${R} .we33-pkg.is-on{color:#06301A;cursor:default}
+${R} .we33-pkg-num{
+  display:grid;place-items:center;flex:none;width:18px;height:18px;border-radius:999px;
+  font-family:var(--mono);font-size:10px;font-weight:700;line-height:1;
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);
+  transition:background .2s ease,border-color .2s ease;
+}
+${R} .we33-pkg.is-on .we33-pkg-num{border-color:rgba(6,48,26,.25);background:rgba(6,48,26,.14)}
+${R} .we33-pkg-name{font-size:12px;font-weight:700;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis}
+${R} .we33-pkg-addr{font-family:var(--mono);font-size:10px;opacity:.6}
+${R}.we33-busy .we33-layout{opacity:.45;pointer-events:none;transition:opacity .2s ease}
+
+/* tablet: drop the address, keep the control compact */
+@container we33 (max-width:640px){
+  ${R} .we33-pkg-addr{display:none}
+}
+/* phone: full-width control, bigger touch targets, no side label */
+@container we33 (max-width:480px){
+  ${R} .we33-pkgbar-label{display:none}
+  ${R} .we33-pkgs{max-width:none}
+  ${R} .we33-pkg{height:38px;padding:0 8px;gap:6px}
+  ${R} .we33-pkg-name{font-size:11.5px}
+}
 
 /* ---------- shared type ---------- */
 ${R} .we33-eyebrow{margin:0;font-size:clamp(8.5px,1.4cqw,10px);letter-spacing:.28em;text-transform:uppercase;color:var(--mint)}
@@ -917,18 +1039,29 @@ ${R} .we33-hint{display:none;margin:5px 0 0;text-align:center;font-size:clamp(7.
  * @param {any} spotsData getSpotsData result (16 positions)
  * @param {{defaultDepth?:'auto'|4|8, frame?:boolean,
  *          balances?:{point?:any,redeem?:any,airdrop?:any,usdt?:any},
+ *          packages?:{name?:string,address?:string}[], activePackage?:number,
+ *          wallet?:any,
  *          refBase?:string}} [options]
  * @returns {string} HTML
  */
 export function renderSpots(account, dappData, spotsData, options = {}) {
   const { defaultDepth = 'auto', frame = true, refBase = REF_BASE, logoUrl: logo = LOGO_URL } = options;
   const balances = readBalances(options.balances);
+  const packages = Array.isArray(options.packages) && options.packages.length ? options.packages : DEFAULT_PACKAGES;
+  const activePackage = activePackageIndex(options.activePackage, packages.length);
+  const connected = isConnected(account);
+
+  // Inline handlers can only carry strings, so the wallet handed to
+  // switchPackage(i, wallet) is parked on window for the latest render.
+  if (typeof window !== 'undefined') {
+    window.__we33Wallet = options.wallet ?? (connected ? { address: account } : null);
+  }
+  const packageName = packages[activePackage]?.name ?? `Package ${activePackage + 1}`;
 
   const rid = `we33-${++__uid}`;
   const input = resolveInputs(dappData, spotsData);
   const spots = input.spots;
   const dapp = readDapp(input.dapp);
-  const connected = isConnected(account);
 
   const at = (i) => spots[i] ?? null;
   const live = (i) => isLive(at(i));
@@ -1147,7 +1280,7 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
         <div class="we33-content">
           <header class="we33-head">
             <div>
-              <p class="we33-eyebrow">WE33 matrix</p>
+              <p class="we33-eyebrow">WE33 matrix · ${esc(packageName)}</p>
               <h2 class="we33-title">Position map</h2>
             </div>
             <div class="we33-switch" role="group" aria-label="Matrix depth">
@@ -1218,6 +1351,9 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
          </button>`}
   </div>
 
+  <!-- package switch -->
+  ${packageBar(packages, activePackage)}
+
   <div class="we33-layout">
 
     <!-- column 1 -->
@@ -1246,7 +1382,7 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
         <div class="we33-content">
           <header class="we33-head">
             <div>
-              <p class="we33-eyebrow">Network</p>
+              <p class="we33-eyebrow">Network · ${esc(packageName)}</p>
               <h2 class="we33-title">Dapp info</h2>
             </div>
           </header>
@@ -1254,7 +1390,7 @@ export function renderSpots(account, dappData, spotsData, options = {}) {
           <div class="we33-group">
             <div class="we33-stats">
               ${stat('Total positions', formatCount(dapp.latestPosition))}
-              ${stat('Global Users', formatCount(dapp.globalDirect + 1n))}
+              ${stat('Global Users', formatCount(toNumber(dapp.globalDirect) + 1))}
             </div>
           </div>
 
